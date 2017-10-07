@@ -1,0 +1,531 @@
+---
+title: "QMSS 4063 Assignment 2"
+author: "Svyatoslav Andriyishen"
+date: "March 13, 2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, error=FALSE, message=FALSE, warning=FALSE, collapse=TRUE, include=FALSE}
+# Load or install packages
+if (!require("dplyr")) {
+ install.packages("dplyr", dependencies = TRUE)
+ library(dplyr)
+ }
+if (!require("tidyr")) {
+ install.packages("tidyr", dependencies = TRUE)
+ library(tidyr)
+ }
+if (!require("rgdal")) {
+ install.packages("rgdal", dependencies = TRUE)
+ library(rgdal)
+ }
+if (!require("readr")) {
+ install.packages("readr", dependencies = TRUE)
+ library(readr)
+ }
+if (!require("sp")) {
+ install.packages("sp", dependencies = TRUE)
+ library(sp)
+ }
+if (!require("tmap")) {
+ install.packages("tmap", dependencies = TRUE)
+ library(tmap)
+ }
+if (!require("ggplot2")) {
+ install.packages("ggplot2", dependencies = TRUE)
+ library(ggplot2)
+ }
+if (!require("spatialEco")) {
+ install.packages("spatialEco", dependencies = TRUE)
+ library(spatialEco)
+}
+if (!require("ggmap")) {
+ install.packages("ggmap", dependencies = TRUE)
+ library(ggmap)
+ }
+if (!require("maptools")) {
+ install.packages("maptools", dependencies = TRUE)
+ library(maptools)
+ }
+if (!require("rgeos")) {
+ install.packages("rgeos", dependencies = TRUE)
+ library(rgeos)
+ }
+```
+
+```{r, error=FALSE, message=FALSE, warning=FALSE, include=FALSE}
+map_NYC <- get_map("NYC", zoom=11, 
+                  source="stamen",maptype="toner-background")
+
+ny_boro <- readOGR("nyc_boroughs_map","nybb")
+sub_enter <- readOGR("nyc_subway_map/entrances_nyc_subway","subway_entrances_may2016")
+sub_route <- readOGR("nyc_subway_map/routes_nyc_subway","routes_nyc_subway_jan2017")
+sub_stops <- readOGR("nyc_subway_map/stops_nyc_subway","stops_nyc_subway_jan2017")
+ny_neigh <- rgdal::readOGR("neighbourhoods.geojson", "OGRGeoJSON")
+airbnb <- read_csv("airbnb_listings.csv")
+sub_enter_exit <- read_csv("NYC_Transit_Subway_Entrance_And_Exit_Data.csv")
+airbnb.df <- SpatialPointsDataFrame(coords = airbnb[c("longitude", "latitude")], data = airbnb, 
+                                    proj4string = CRS("+proj=longlat +datum=NAD83 +ellps=GRS80 +towgs84=0,0,0"))
+sub_ee_df <- SpatialPointsDataFrame(coords = sub_enter_exit[c("Entrance Longitude", "Entrance Latitude")], data = sub_enter_exit, 
+                                    proj4string = CRS("+proj=longlat +datum=NAD83 +ellps=GRS80 +towgs84=0,0,0"))
+ny_boro <- spTransform(ny_boro, CRS("+proj=longlat +datum=NAD83 +ellps=GRS80 +towgs84=0,0,0"))
+sub_enter <- spTransform(sub_enter, CRS("+proj=longlat +datum=NAD83 +ellps=GRS80 +towgs84=0,0,0"))
+sub_route <- spTransform(sub_route, CRS("+proj=longlat +datum=NAD83 +ellps=GRS80 +towgs84=0,0,0"))
+sub_stops <- spTransform(sub_stops, CRS("+proj=longlat +datum=NAD83 +ellps=GRS80 +towgs84=0,0,0"))
+ny_neigh <- spTransform(ny_neigh, CRS("+proj=longlat +datum=NAD83 +ellps=GRS80 +towgs84=0,0,0"))
+```
+
+Task
+----
+
+In this first two parts of the exercise, I want you to explore the key variables of AirBnB use, the locations of AirBnB places, and some (potential) indications on how it impacts the rental market. In the third part, I want you to explore whether or not we can find a relationship between the location of subway stations and location, type, and features of AirBnB places. In each task description, I ask you to provide specific visualizations or data analyses, but please include some written explanations as well to situate the visualizations you provide. Do not directly include any code in the rendered output when presenting your results.
+
+### 1.  Overall Location
+
+__Question:__ Provide a map to show where in New York City AirBnB listings are located. Provide a second map in which you summarize the density of these listings and highlight the hotspots for AirBnB locations. Make sure to annotate a few hotspots on the map.
+
+Map of AirBnB locations:
+
+```{r, echo=FALSE, error=FALSE, message=FALSE, warning=FALSE}
+# AirBnb locations in NYC
+
+tm_shape(ny_boro) +
+  tm_borders(col = "darkorange") + tm_fill(col = "darkgrey") +
+tm_shape(airbnb.df) +
+  tm_dots(col = "darkgreen") +
+  tm_layout(title = "AirBnB Locations\nin New York City") +
+  tm_style_classic()
+```
+
+Heatmap of AirBnB locations:
+
+```{r, echo=FALSE, error=FALSE, message=FALSE, warning=FALSE}
+# geocode("East Village")
+# geocode("Williamsburg, NY")
+
+ggmap(map_NYC) +
+  geom_point(data = airbnb, aes(x = longitude, y = latitude), col = I("darkgreen"), size = .0001) +
+  geom_density2d(aes(x = longitude,y = latitude), data = airbnb, 
+                   color="red", size=1, bins=12) +
+  stat_density2d(aes(x = longitude,y = latitude, 
+                 fill = ..level.., alpha = ..level..),
+                 data = airbnb, geom = 'polygon', bins = 12) +
+  scale_fill_gradient2(low = "white", mid="yellow", high = "red") +
+  scale_alpha(range = c(0.00, 0.5)) + theme(legend.position = "none") + 
+  annotate("text",x = -73.98153, y = 40.72648, label = "East Village",
+             color = "Dark Blue", fontface = 2, size = 2) +
+  annotate("text",x = -73.95707, y = 40.70812, label = "Williamsburg",
+             color = "Dark Blue", fontface = 2, size = 2) +
+  labs(title = "Most Heavily Concentrated Areas\nof AirBnB Listings",
+       x = "", y = "") +
+  theme(plot.title = element_text(hjust = 0.5, size = 20),
+        axis.line=element_blank(),
+        axis.text=element_blank(),
+        axis.ticks=element_blank(),
+        axis.title=element_blank(),
+        panel.background=element_blank(),
+        panel.border=element_blank(),
+        panel.grid=element_blank(),
+        panel.margin=unit(0, "lines"),
+        plot.background=element_blank())
+```
+
+__Discussion:__ I used `tmap` package for one plot, and `ggplot2` and `ggmap` for another to practice using both. These are simple plots, so I did not overcomplicate things with too many annotations and unnecessary additions. Although on the first map, we have trouble telling how many AirBnB listings there are at each neighborhood due to the 40,000+ listings covering most of Manhattan and Brooklyn, we can tell distinct hotspots of AirBnB activity on the second map. I chose to highlight the two biggest hotspots in East Village and Williamsburg.
+
+### 2.  Renting out your appartment vs. permanent rentals
+
+__Question:__ An Airbnb host can set up a calendar for their listing so that it is only available for a few days or weeks a year. Other listings are available all year round (except for when it is already booked). Entire homes or apartments highly available and rented frequently year-round to tourists probably don't have the owner present, are illegal, and more importantly, are displacing New Yorkers.
+
+Choose a combination of *both non-map and map graphs* to explore where in NYC listings are available sporadically vs. year-round. Make sure to highlight the neighborhoods where most listings appear to be permanent or semi-permanent rentals. Try to estimate the average monthly income from such rentals.
+
+Use these and other variables to provide some information about how such permanent rentals differ from sporadic rentals in a concise format (i.e. try to combine summary information and plots in a smart way). Feel free to use summary statistics, map, and/or non-map graphical displays.
+
+```{r, echo=FALSE, error=FALSE, message=FALSE, warning=FALSE}
+## ggplot2 exploration of variables
+
+airbnb$price_2 = as.numeric(gsub("\\$", "", airbnb$price))
+
+airbnb$fullyear <- ifelse(airbnb$availability_365 == 365,  "Full Year Rental", "Sporadic Rental")
+
+ggplot(data = airbnb, aes(x = as.factor(airbnb$availability_365 == 365), y = price_2, 
+                          col = as.factor(airbnb$availability_365 == 365) == 1)) +
+  geom_boxplot(fill = "grey") +
+  scale_x_discrete(labels=c("Sporadic","Full Year")) +
+  labs(x = "Availability of Listing",
+       y = "Nightly Price",
+       title = "Price difference between AirBnB listings\nthat are available year-round\nand those not available year round") +
+  ggthemes::theme_tufte() + 
+  theme(legend.position = "none",
+        plot.title = element_text(hjust = 0.5, size = 24))
+
+ggplot(data = airbnb, aes(x = as.factor(airbnb$availability_365 == 365), y = host_listings_count, 
+                          col = as.factor(airbnb$availability_365 == 365) == 1)) +
+  stat_summary(fun.y="mean", geom="bar", fill = "#F8766D") +
+  scale_x_discrete(labels=c("Sporadic","Full Year")) +
+  labs(x = "Availability of Listing",
+       y = "Average Number of Rented Properties",
+       title = "Average number of properties rented by hosts\nthat rent at least one property year-long\nversus hosts that do not") +
+  ggthemes::theme_tufte() + 
+  theme(legend.position = "none",
+        plot.title = element_text(hjust = 0.5, size = 24))
+
+ggplot(data = airbnb, aes(x = as.factor(airbnb$availability_365 == 365), y = price_2*availability_365/12/10^6, 
+                          col = as.factor(airbnb$availability_365 == 365) == 1)) +
+  geom_bar(fill = "grey", stat = "identity") +
+  scale_x_discrete(labels=c("Sporadic","Full Year")) +
+  labs(x = "Availability of Listing",
+       y = "Monthly Income from Listings (in millions)",
+       title = "Income difference between all AirBnB listings\nthat are available year-round\nand those not available year round") +
+  ggthemes::theme_tufte() + 
+  theme(legend.position = "none",
+        plot.title = element_text(hjust = 0.5, size = 24))
+
+ggplot(data = airbnb, aes(x = as.factor(airbnb$availability_365 == 365), y = price_2*availability_365/12, 
+                          col = as.factor(airbnb$availability_365 == 365) == 1)) +
+  stat_summary(fun.y="mean", geom="bar", fill = "#F8766D") +
+  scale_x_discrete(labels=c("Sporadic","Full Year")) +
+  labs(x = "Availability of Listing",
+       y = "Monthly Income from Listing",
+       title = "Average monthly income difference\nbetween AirBnB listings\nthat are available year-round\nand those not available year round") +
+  ggthemes::theme_tufte() + 
+  theme(legend.position = "none",
+        plot.title = element_text(hjust = 0.5, size = 24))
+```
+
+__Discussion:__ There doesn't seem to be much difference in nightly price for an AirBnB listing that is rented out year-round versus one that is rented out only sporadically. Similarly, there is no difference in ratings (plot not shown due to repetitive nature of information) and the heatmap of locations below shows that the concentrations of both types of listings are in the same regions, although there are far fewer year-round listings. However, hosts that rent at least one property year-round, tend to rent more properties on average. Although the larger share of total income from AirBnB listings is coming from sporadic rentals, due to the higher number of them, the year-long rental income is not small (above 5 million). Moreover, the potential mean monthly income from year-long rentals is twice higher than that for sporadic rentals, at around four thousand dollars, making it a lucrative business for a scrupulous host.
+```{r, echo=FALSE, error=FALSE, message=FALSE, warning=FALSE}
+## ggmap graphs
+abnb_fullyear <- airbnb[which(airbnb$availability_365 == 365),]
+abnb_notfullyear <- airbnb[which(airbnb$availability_365 != 365),]
+
+#ggplot() +
+#  geom_polygon(data = ny_boro, aes(x = long, y = lat, group = group), fill = "darkgrey") +
+  
+  ggmap(map_NYC) +
+  geom_point(data = airbnb, aes(x = longitude, y = latitude), col = I("darkred"), size = .0001, size = 3) +
+  stat_density2d(aes(x = longitude,y = latitude, 
+                 fill = ..level.., alpha = ..level..),
+                 data = airbnb, geom = 'polygon', bins = 12) +
+  scale_fill_gradient2(low = "white", mid="yellow", high = "red") +
+  scale_alpha(range = c(0.00, 0.5)) + theme(legend.position = "none") + 
+  annotate("text",x = -73.98153, y = 40.72648, label = "East Village",
+             color = "Dark Blue", fontface = 2, size = 2) +
+  annotate("text",x = -73.95707, y = 40.70812, label = "Williamsburg",
+             color = "Dark Blue", fontface = 2, size = 2) +
+  labs(title = "Heatmap of AirBnB locations rented out year-round and sporadically",
+       x = "", y = "") +
+  theme(plot.title = element_text(hjust = 0.7, size = 16),
+        axis.line=element_blank(),
+        axis.text=element_blank(),
+        axis.ticks=element_blank(),
+        axis.title=element_blank(),
+        panel.background=element_blank(),
+        panel.border=element_blank(),
+        panel.grid=element_blank(),
+        panel.margin=unit(0, "lines"),
+        plot.background=element_blank()) +
+    facet_wrap(~fullyear, ncol = 2)
+```
+
+
+### 3.  AirBnB and Subway Access
+
+__Question:__ Explore how the location, type, and features of AirBnB listings are related to subway access. For this part, *select a single neighborhood* that lends itself to such an analysis (i.e. has multiple subway stations, different types of AirBnB listings etc.). If you feel ambitious you can complement this with an analysis of the entire city or an entire borough, but don't get bogged down in analyzing 40,000 listings; focus on a single neighborhood.
+
+You should decide what are some interesting questions and patterns to explore and map here. But please make sure to incorporate the following pieces of analysis:
+
+-   Use the information about the location of subway stations and AirBnB listings to calculate distances from each listing to the next (nearest) subway.
+-   Calculate (and display) how many listings are in different perimeters around a subway station. Make sure to map the subway stations (and lines) to give the reader an idea of what you are doing.
+-   Explore whether the price of listings is related to having access to the subway nearby. Try to control for some other obvious determinants of price: how many people the space sleeps, whether it’s an entire property or a private room, the type of property (apartment, boat, house, loft), and the number of reviews. Display and describe your findings.
+
+```{r, echo=FALSE, error=FALSE, message=FALSE, warning=FALSE}
+Williamsburg <- ny_neigh[232,]
+
+Williamsburg <- spTransform(Williamsburg, CRS("+proj=longlat +datum=NAD83 +ellps=GRS80 +towgs84=0,0,0"))
+
+
+airbnb_wlms <- airbnb.df[Williamsburg,]
+sub_ee_wlms <- sub_ee_df[Williamsburg,]
+wlms_enter <- sub_enter[Williamsburg,]
+wlms_route <- sub_route[Williamsburg,]
+wlms_stops <- sub_stops[Williamsburg,]
+wlms_enter <- spTransform(wlms_enter, CRSobj = "+init=epsg:32118")
+wlms_route <- spTransform(wlms_route, CRSobj = "+init=epsg:32118")
+wlms_stops <- spTransform(wlms_stops, CRSobj = "+init=epsg:32118")
+sub_ee_wlms <- spTransform(sub_ee_wlms, CRSobj = "+init=epsg:32118")
+airbnb_wlms <- spTransform(airbnb_wlms, CRSobj = "+init=epsg:32118")
+Williamsburg <- spTransform(Williamsburg, CRSobj = "+init=epsg:32118")
+station_buffer <- gBuffer(spgeom = wlms_enter, width = 250)
+airbnb_buff <- airbnb_wlms[station_buffer,]
+airbnb_buffout <- airbnb_wlms[!(airbnb_wlms$id %in% airbnb_buff$id),]
+airbnb_wlms$sub_access <- ifelse((airbnb_wlms$id %in% airbnb_buff$id), "Close", "Not Close")
+
+
+tm_shape(Williamsburg) +
+  tm_borders() + tm_fill() +
+tm_shape(wlms_route) +
+  tm_lines(lwd = 2) +
+tm_shape(wlms_enter) +
+  tm_dots(size = 1, alpha = .9, col = "orange") +
+tm_shape(wlms_stops) +
+  tm_dots() +
+  tm_text("stop_name", col = "black", fontface = 2) +
+tm_shape(airbnb_wlms) +
+  tm_dots(title = "Subway Access", col = "sub_access", palette = "Set1" , alpha = .6) +
+  tm_legend(legend.position = c("right","bottom"),
+            legend.text.size = .8, legend.title.size = 1) +
+tm_style_classic() +
+  tm_layout(title = "Williamsburg AirBnB locations and subway stations",
+            fontface = 2) +
+  tm_shape(station_buffer) + tm_borders(col="blue")
+```
+
+__Discussion:__ I took 250 meters distance between an AirBnB listing and a subway entrace to mean "close" for this map.
+
+```{r, echo=FALSE, error=FALSE, message=FALSE, warning=FALSE}
+# calculating various distances
+buff100 <- gBuffer(spgeom = wlms_enter, width = 100)
+buff200 <- gBuffer(spgeom = wlms_enter, width = 200)
+buff300 <- gBuffer(spgeom = wlms_enter, width = 300)
+buff500 <- gBuffer(spgeom = wlms_enter, width = 500)
+airbnb_buff100 <- airbnb_wlms[buff100,]
+airbnb_buff200 <- airbnb_wlms[buff200,]
+airbnb_buff300 <- airbnb_wlms[buff300,]
+airbnb_buff500 <- airbnb_wlms[buff500,]
+
+airbnb_wlms$`Distance to Subway` <- ifelse((airbnb_wlms$id %in% airbnb_buff100$id), "100m",
+                                           ifelse((airbnb_wlms$id %in% airbnb_buff200$id), "200m",
+                                                  ifelse((airbnb_wlms$id %in% airbnb_buff300$id), "300m",
+                                                         ifelse((airbnb_wlms$id %in% airbnb_buff500$id), "500m", "Over 500m"))))
+
+
+ggplot(data = airbnb_wlms@data, aes(x = `Distance to Subway`)) +
+  geom_histogram(stat = "count", fill = "#F8766D") +
+  labs(y = "Number of Listings",
+       title = "Number of AirBnB listings in Williamsburg\nby distance from nearest subway entrance") +
+  ggthemes::theme_tufte() + 
+  theme(legend.position = "none",
+        plot.title = element_text(hjust = 0.5, size = 24))
+
+airbnb_wlms$price_2 = as.numeric(gsub("\\$", "", airbnb_wlms$price))
+ggplot(data = airbnb_wlms@data, aes(x = `Distance to Subway`, y = price_2)) +
+  stat_summary(fun.y="mean", geom="bar", fill = "#F8766D") +
+  labs(y = "Average Nightly Price of Listing",
+       title = "Average nightly price of AirBnB listings\nbased on distance from nearest subway\nand type of advertized room") +
+  ggthemes::theme_tufte() + 
+  theme(legend.position = "none",
+        plot.title = element_text(hjust = 0.5, size = 24)) +
+  facet_wrap(~room_type, ncol = 3)
+```
+
+__Discussion:__ I tried plotting the last plot using `accommodates`, `property_type`, `bedrooms`, `review_scores_rating`, and other variables, but all of the results were very similar, so I chose not to include them. It seems that access to subway entrances has a slight negative impact on the nightly price of AirBnB listings in Williamsburg. This may be because listings farther away from the subway could be coastline properties with nice views and might, therefore, cost more.
+
+
+
+#### Project Book
+
+For this week, I broke down some of the code I used to explore the data and some initial (mostly unsuccessful for my needs) methods I tried for various parts of the exercise. I do think that we need *much more* instruction on subsetting data, as that is the actual timesink in these assignments and not the actual data visualization.
+
+I also messed up on setting CRS coordinates and had to submit this assignment a day late. My original code for question 3 ran, but I modified the data loading code earlier in the markdown file in a way that my sp objects switched from projected to unprojected and rgeos functions stopped running. I tried very hard to figure it out, but could not do it in time on Monday, March 13. Over the next day, I set the CRS to an EPSG format measured in meters for New York City, and that seemed to fix the problem. I apologize for being late.
+
+Some initial data exploration:
+```{r, eval=FALSE, echo=TRUE, error=FALSE, message=FALSE, warning=FALSE}
+str(airbnb)
+str(ny_boro, max.level = 2)
+str(wlms_stops)
+```
+
+Some initial research on combining spatial layers and sorting data:
+```{r, eval=FALSE, error=FALSE, message=FALSE, warning=FALSE, include=FALSE}
+# Research importing JSON objects
+
+# Research converting Excel into spatial objects and use stackoverflow solution
+airbnb.xy = airbnb[c("longitude", "latitude")]
+coordinates(airbnb.xy) <- ~longitude+latitude
+class(airbnb.xy)
+proj4string(airbnb.xy) <- CRS("+proj=longlat +datum=NAD83 +ellps=GRS80 +towgs84=0,0,0")
+
+# a better way # Figure out how datums work and match them
+proj4string(ny_boro)
+
+airbnb.df <- SpatialPointsDataFrame(coords = airbnb[c("longitude", "latitude")], data = airbnb, 
+                                    proj4string = CRS(proj4string(ny_boro)))
+
+airbnb.sp <- SpatialPoints(coords = airbnb[c("longitude", "latitude")], proj4string = CRS(proj4string(ny_boro)))
+
+# Initially map all created objects with tm_shape() to verfiy they were properly imported
+# Code for initial mapping not shown
+
+# Combine point data from airbnb with plygon data - failed attempts
+#ny_airbnb <- point.in.polygon(airbnb.df[c("longitude", "latitude")], ny_boro)
+#ny_airbnb <- merge(ny_boro, airbnb, by.x = "BoroName", by.y = as.factor("city"), all.y = FALSE)
+#ny_airbnb <- over(airbnb.df, ny_boro)
+
+#ny_airbnb <- SpatialPointsDataFrame(coords = airbnb[c("longitude", "latitude")], data = airbnb, 
+#                                    proj4string = CRS("+proj=lcc +lat_1=40.66666666666666 +lat_2=41.03333333333333 +lat_0=40.16666666666666 #+lon_0=-74 +x_0=300000 +y_0=0 +datum=NAD83 +units=us-ft +no_defs +ellps=GRS80 +towgs84=0,0,0"))
+#ny_airbnb <- point.in.poly(airbnb.df, ny_boro)
+
+names(ny_boro)
+head(str(airbnb))  
+
+summary(airbnb.df)
+  
+# Check for duplicates in nyc_income
+any(duplicated(ny_boro$BoroName))
+
+# Check for duplicates in nyc_tracts
+any(duplicated(airbnb$neighbourhood_group_cleansed))
+airbnb_sort <- tapply(airbnb$neighbourhood_group_cleansed, FUN=length)
+
+# Check nyc_tracts in nyc_income
+all(ny_boro$BoroName %in% airbnb$neighbourhood_group_cleansed)
+
+# Check nyc_income in nyc_tracts
+all(airbnb$neighbourhood_group_cleansed %in% ny_boro$BoroName)
+
+# Merge nyc_tracts and nyc_income: nyc_tracts_merge
+#ny_airbnb <- merge(ny_boro, airbnb, by.x = "BoroName", by.y = "neighbourhood_group_cleansed")
+
+```
+
+Condensing dataframes research:
+
+```{r, echo=TRUE, error=FALSE, message=FALSE, warning=FALSE}
+by_neighborhood <- airbnb %>%
+  group_by(neighbourhood) %>%
+  summarise(avg_avail = mean(availability_365, na.rm = TRUE),
+            avg_price = mean(price_2, na.rm = TRUE),
+            counts = n())
+by_neighborhood <- as.data.frame(by_neighborhood)
+summary(by_neighborhood)
+
+
+ny_neigh@data <- data.frame(ny_neigh@data, by_neighborhood[match(ny_neigh@data[,"neighbourhood"], by_neighborhood[,"neighbourhood"]),])
+
+ny_neigh@data$counts
+
+tm_shape(ny_neigh) +
+  tm_fill(col = "counts")
+
+tm_shape(ny_neigh[138,]) +
+  tm_fill()
+```
+
+Exploration for question 2:
+
+```{r, eval=FALSE, echo=TRUE, error=FALSE, message=FALSE, warning=FALSE}
+# Recode data
+summary(airbnb$availability_365)
+
+abnb_fullyear <- airbnb[which(airbnb$availability_365 == 365),]
+summary(abnb_fullyear$availability_365)
+
+abnb_notfullyear <- airbnb[which(airbnb$availability_365 != 365),]
+summary(abnb_notfullyear$availability_365)
+
+airbnb$price_2 = as.numeric(gsub("\\$", "", airbnb$price))
+summary(airbnb$price_2)
+
+airbnb$fullyear <- ifelse(airbnb$availability_365 == 365,  1, 0)
+sum(airbnb$fullyear)
+
+# Graph availability vs price information
+ggplot(data = airbnb, aes(x = as.factor(airbnb$availability_365 == 365), y = price_2, 
+                          col = as.factor(airbnb$availability_365 == 365) == 1)) +
+  geom_boxplot(fill = "grey") +
+  scale_x_discrete(labels=c("Not Full Year","Full Year")) +
+  labs(x = "Availability of Listing",
+       y = "Nightly Price",
+       title = "Price difference between AirBnB listings\nthat are available year-round\nand those not available year round") +
+  ggthemes::theme_tufte() + 
+  theme(legend.position = "none",
+        plot.title = element_text(hjust = 0.5, size = 24))
+
+ggplot(data = airbnb, aes(x = as.factor(airbnb$availability_365 == 365), y = price_2*availability_365/12/10^6, 
+                          col = as.factor(airbnb$availability_365 == 365) == 1)) +
+  geom_bar(fill = "grey", stat = "identity") +
+  scale_x_discrete(labels=c("Not Full Year","Full Year")) +
+  labs(x = "Availability of Listing",
+       y = "Monthly Income from Listings (in millions)",
+       title = "Income difference between all AirBnB listings\nthat are available year-round\nand those not available year round") +
+  ggthemes::theme_tufte() + 
+  theme(legend.position = "none",
+        plot.title = element_text(hjust = 0.5, size = 24))
+
+ggplot(data = airbnb, aes(x = as.factor(airbnb$availability_365 == 365), y = price_2*availability_365/12, 
+                          col = as.factor(airbnb$availability_365 == 365) == 1)) +
+  stat_summary(fun.y="mean", geom="bar", fill = "#F8766D") +
+  scale_x_discrete(labels=c("Not Full Year","Full Year")) +
+  labs(x = "Availability of Listing",
+       y = "Monthly Income from Listing",
+       title = "Average monthly income difference\nbetween AirBnB listings\nthat are available year-round\nand those not available year round") +
+  ggthemes::theme_tufte() + 
+  theme(legend.position = "none",
+        plot.title = element_text(hjust = 0.5, size = 24))
+
+# Found base ggplot colors to match in the last plot by using ggplot_build()$data #F8766D
+
+
+# Create a map of hotspots
+ggplot() +
+  geom_polygon(data = ny_boro, aes(x = long, y = lat, group = group), fill = "darkgrey") +
+  geom_point(data = abnb_fullyear, aes(x = longitude, y = latitude), col = I("darkred"), size = .0001, size = 3) +
+  stat_density2d(aes(x = longitude,y = latitude, 
+                 fill = ..level.., alpha = ..level..),
+                 data = airbnb, geom = 'polygon', bins = 12) +
+  scale_fill_gradient2(low = "white", mid="yellow", high = "red") +
+  scale_alpha(range = c(0.00, 0.5)) + theme(legend.position = "none") + 
+  labs(title = "",
+       x = "", y = "") +
+  theme(plot.title = element_text(hjust = 0.5, size = 20),
+        axis.line=element_blank(),
+        axis.text=element_blank(),
+        axis.ticks=element_blank(),
+        axis.title=element_blank(),
+        panel.background=element_blank(),
+        panel.border=element_blank(),
+        panel.grid=element_blank(),
+        panel.margin=unit(0, "lines"),
+        plot.background=element_blank())
+```
+
+Identifying neighborhoods:
+
+```{r, echo=TRUE, error=FALSE, message=FALSE, warning=FALSE}
+# pick one neighborhood
+ny_neigh$neighbourhood
+# select Williamsburg
+Williamsburg_n <- 232
+```
+
+Spatial join code research:
+
+```{r, echo=TRUE, error=FALSE, message=FALSE, warning=FALSE}
+summary(ny_neigh, max.level = 2)
+summary(airbnb.df)
+
+Murray_Hill <- ny_neigh[138,]
+summary(Murray_Hill, max.level = 2)
+
+Murray_Hill <- spTransform(Murray_Hill, CRS(proj4string(ny_boro)))
+airbnb.df <- spTransform(airbnb.df, CRS(proj4string(ny_boro)))
+airbnb_murray <- airbnb.df[Murray_Hill,]
+
+tm_shape(ny_neigh[138,]) +
+  tm_borders() + tm_fill() +
+tm_shape(airbnb_murray) +
+  tm_dots()
+```
+
+Find EPSG code for NAD83:
+
+```{r, echo=TRUE, error=FALSE, message=FALSE, warning=FALSE}
+EPSG <-make_EPSG() # create data frame of available EPSG codes
+EPSG[grepl("NAD83$", EPSG$note), ] # "+init=epsg:4269"
+
+```
+
